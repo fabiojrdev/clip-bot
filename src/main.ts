@@ -9,7 +9,7 @@ async function bootstrap() {
     origin: '*',
   });
 
-  await app.listen(3000);
-  console.log('Clip API rodando na porta 3000');
+  await app.listen(3030);
+  console.log('Clip API rodando na porta 3030');
 }
 bootstrap();
