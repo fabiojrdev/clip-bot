@@ -13,19 +13,25 @@ export class ClipService {
   ) {}
 
   /**
-   * Dispara uma mensagem inicial no Discord dizendo que a tentativa começou.
+   * Webhook de FEEDBACK IMEDIATO:
+   * "tentativa de clip foi iniciada", só pra confirmar que a API rodou.
    */
   async sendAttemptLog(twitchChannel?: string, twitchUser?: string) {
-    const webhookUrl = this.config.get<string>('DISCORD_WEBHOOK_URL');
+    const webhookUrl = this.config.get<string>('DISCORD_WEBHOOK_FEEDBACK');
     if (!webhookUrl) {
-      this.logger.warn('DISCORD_WEBHOOK_URL não configurado, pulando tentativa inicial.');
+      this.logger.warn(
+        'DISCORD_WEBHOOK_FEEDBACK não configurado, pulando tentativa inicial.',
+      );
       return;
     }
 
-    const baseMsg = 'Tentativa de clip foi iniciada:';
-    // Você pediu exatamente esse texto incluindo o próprio webhook na mesma linha.
-    // Vou mandar exatamente como você descreveu.
-    const fullMsg = `${baseMsg} ${webhookUrl}\nCanal: ${twitchChannel ?? '-'} | User: ${twitchUser ?? '-'}`;
+    // Mensagem que você quer ver no canal de feedback
+    const fullMsg = [
+      '🚀 Tentativa de clip foi iniciada!',
+      `Canal: ${twitchChannel ?? '-'}`,
+      `User: ${twitchUser ?? '-'}`,
+      `Horário: ${new Date().toISOString()}`,
+    ].join('\n');
 
     await firstValueFrom(
       this.http.post(
@@ -37,21 +43,39 @@ export class ClipService {
   }
 
   /**
-   * Dispara uma segunda mensagem no Discord com o resultado/link do clip.
+   * Webhook de RESULTADO FINAL:
+   * "clip criado" + link final do clip.
    */
-  async sendResultLog(clipUrl: string, twitchChannel?: string, twitchUser?: string) {
-    const webhookUrl = this.config.get<string>('DISCORD_CLIPES_WEBHOOK_URL');
+  async sendResultLog(
+    clipUrl: string | null,
+    twitchChannel?: string,
+    twitchUser?: string,
+  ) {
+    const webhookUrl = this.config.get<string>(
+      'DISCORD_WEBHOOK_CLIP',
+    );
     if (!webhookUrl) {
-      this.logger.warn('DISCORD_WEBHOOK_URL não configurado, pulando resultado.');
+      this.logger.warn(
+        'DISCORD_WEBHOOK_CLIP não configurado, pulando resultado.',
+      );
       return;
     }
 
-    const content = [
-      '✅ Clip criado!',
+    const contentLines: string[] = [
+      '🎬 Resultado do Clip',
       `Canal: ${twitchChannel ?? '-'}`,
       `User: ${twitchUser ?? '-'}`,
-      `Link: ${clipUrl}`,
-    ].join('\n');
+    ];
+
+    if (clipUrl) {
+      contentLines.push(`Link do clip: ${clipUrl}`);
+    } else {
+      contentLines.push(
+        '❌ Falha ao capturar link do clip (a API externa não retornou URL)',
+      );
+    }
+
+    const content = contentLines.join('\n');
 
     await firstValueFrom(
       this.http.post(
@@ -63,9 +87,9 @@ export class ClipService {
   }
 
   /**
-   * Fala com a API externa que realmente cria o clip e retorna o link final.
+   * Fala com a API externa que realmente cria o clip e tenta extrair o link final.
    */
-  async createClip(twitchChannel: string): Promise<string> {
+  async createClip(twitchChannel: string): Promise<string | null> {
     const baseUrl = this.config.get<string>('CLIP_API_BASE'); // ex: https://api.thefyrewire.com/twitch/clips/create
     const defaultChannelId = this.config.get<string>('DEFAULT_CHANNEL'); // ex: c6130e...
 
@@ -75,43 +99,66 @@ export class ClipService {
 
     this.logger.debug(`Chamando Clip API: ${clipUrlApi}`);
 
-    const { data } = await firstValueFrom(
-      this.http.get(clipUrlApi),
-    );
+    const { data } = await firstValueFrom(this.http.get(clipUrlApi));
 
-    // Log pra debug (importante enquanto a gente está acertando o formato)
-    this.logger.debug('Resposta da Clip API:', JSON.stringify(data));
+    // Log cru pra você debugar no console do servidor
+    this.logger.debug('Resposta da Clip API: ' + JSON.stringify(data));
 
-    // Tentar achar o link do clip em formatos comuns:
+    // Tentativas de chaves comuns
     const clipUrl =
       data?.url ||
       data?.clip_url ||
       data?.clipUrl ||
       data?.link ||
       data?.clip?.url ||
-      data?.data?.url;
+      data?.data?.url ||
+      data?.data?.link;
 
-    if (!clipUrl) {
-      throw new Error('Clip API não retornou url do clip.');
+    if (!clipUrl || typeof clipUrl !== 'string') {
+      this.logger.error(
+        'Clip API não retornou uma url string reconhecida.',
+      );
+      return null;
     }
 
     return clipUrl;
   }
 
   /**
-   * Fluxo completo: loga tentativa, cria clip, loga resultado e devolve msg pro chat.
+   * Fluxo completo:
+   * 1. manda feedback imediato (webhook 1)
+   * 2. tenta criar clip
+   * 3. manda resultado final com link (webhook 2)
+   *
+   * Observação: NÃO retorna nada pro chat. O controller cuida da resposta.
    */
-  async handleClipFlow(twitchChannel: string, twitchUser?: string) {
-    // 1. logar tentativa
-    await this.sendAttemptLog(twitchChannel, twitchUser);
+  async processClipRequest(twitchChannel: string, twitchUser?: string) {
+    // 1. Feedback imediato
+    try {
+      await this.sendAttemptLog(twitchChannel, twitchUser);
+    } catch (err: any) {
+      this.logger.error(
+        'Erro ao enviar webhook de tentativa inicial:',
+        err?.stack || err,
+      );
+    }
 
-    // 2. criar clip de fato
-    const clipUrl = await this.createClip(twitchChannel);
+    // 2. Criar clip
+    let clipUrl: string | null = null;
+    try {
+      clipUrl = await this.createClip(twitchChannel);
+    } catch (err: any) {
+      this.logger.error('Erro ao criar clip:', err?.stack || err);
+    }
 
-    // 3. logar resultado com o link final
-    await this.sendResultLog(clipUrl, twitchChannel, twitchUser);
-
-    // 4. resposta que vai pro chat da Twitch via StreamElements
-    return `Clip criado: ${clipUrl}`;
+    // 3. Mandar resultado pro webhook de clipes
+    try {
+      await this.sendResultLog(clipUrl, twitchChannel, twitchUser);
+    } catch (err: any) {
+      this.logger.error(
+        'Erro ao enviar webhook de resultado do clip:',
+        err?.stack || err,
+      );
+    }
   }
 }

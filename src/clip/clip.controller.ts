@@ -1,30 +1,40 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Res, Logger } from '@nestjs/common';
+import { Response } from 'express';
 import { ClipService } from './clip.service';
 import { CreateClipDto } from './dto/create-clip.dto';
 
 @Controller('clip')
 export class ClipController {
+  private readonly logger = new Logger(ClipController.name);
+
   constructor(private readonly clipService: ClipService) {}
 
-  // Exemplo de uso:
-  // GET /clip?channel=nomedocanal&type=chat&user=fulano
-  //
-  // No StreamElements você vai chamar algo tipo:
-  // $(customapi.https://SEU-DOMINIO.com/clip?channel=$(channel)&user=$(user))
-  //
+  // GET /clip?channel=$(channel)&user=$(user)
+  // Esse endpoint será chamado via $(customapi ...)
   @Get()
-  async createAndAnnounce(@Query() query: CreateClipDto) {
+  async createAndAnnounce(
+    @Query() query: CreateClipDto,
+    @Res() res: Response,
+  ) {
     const twitchChannel = query.channel || 'meucanal';
     const twitchUser = query.user || 'alguem';
 
-    const msg = await this.clipService.handleClipFlow(
-      twitchChannel,
-      twitchUser,
-    );
+    // Dispara o fluxo, mas NÃO espera terminar pra responder.
+    // Isso evita timeout no StreamElements.
+    this.clipService
+      .processClipRequest(twitchChannel, twitchUser)
+      .catch((err) => {
+        this.logger.error(
+          'Erro inesperado em processClipRequest:',
+          err?.stack || err,
+        );
+      });
 
-    // IMPORTANTE:
-    // StreamElements espera texto puro na resposta HTTP.
-    // Então vamos retornar string e não JSON.
-    return msg;
+    // O que volta pro chat da Twitch imediatamente.
+    // Você pode customizar essa frase se quiser.
+    const responseText =
+      'Tentativa de clip iniciada. Verifique o Discord 👍';
+
+    return res.status(200).type('text/plain').send(responseText);
   }
 }
