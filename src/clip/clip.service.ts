@@ -65,6 +65,7 @@ export class ClipService {
       '🎬 Resultado do Clip',
       `Canal: ${twitchChannel ?? '-'}`,
       `User: ${twitchUser ?? '-'}`,
+      '@everyone',
     ];
 
     if (clipUrl) {
@@ -104,7 +105,12 @@ export class ClipService {
     // Log cru pra você debugar no console do servidor
     this.logger.debug('Resposta da Clip API: ' + JSON.stringify(data));
 
-    // Tentativas de chaves comuns
+    // Se a resposta for uma string diretamente, usa ela
+    if (typeof data === 'string') {
+      return data;
+    }
+
+    // Tentativas de chaves comuns em objetos
     const clipUrl =
       data?.url ||
       data?.clip_url ||

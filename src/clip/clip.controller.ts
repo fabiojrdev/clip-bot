@@ -33,7 +33,7 @@ export class ClipController {
     // O que volta pro chat da Twitch imediatamente.
     // Você pode customizar essa frase se quiser.
     const responseText =
-      'Tentativa de clip iniciada. Verifique o Discord 👍';
+      'Criando clipe segura a mão 👍';
 
     return res.status(200).type('text/plain').send(responseText);
   }
