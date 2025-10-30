@@ -135,10 +135,9 @@ export class ClipService {
    * 1. manda feedback imediato (webhook 1)
    * 2. tenta criar clip
    * 3. manda resultado final com link (webhook 2)
-   *
-   * Observação: NÃO retorna nada pro chat. O controller cuida da resposta.
+   * 4. retorna o link do clip para responder no chat
    */
-  async processClipRequest(twitchChannel: string, twitchUser?: string) {
+  async processClipRequest(twitchChannel: string, twitchUser?: string): Promise<string | null> {
     // 1. Feedback imediato
     try {
       await this.sendAttemptLog(twitchChannel, twitchUser);
@@ -166,5 +165,8 @@ export class ClipService {
         err?.stack || err,
       );
     }
+
+    // 4. Retorna o link do clip
+    return clipUrl;
   }
 }

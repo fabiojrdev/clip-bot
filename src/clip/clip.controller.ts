@@ -19,22 +19,32 @@ export class ClipController {
     const twitchChannel = query.channel || 'meucanal';
     const twitchUser = query.user || 'alguem';
 
-    // Dispara o fluxo, mas NÃO espera terminar pra responder.
-    // Isso evita timeout no StreamElements.
-    this.clipService
-      .processClipRequest(twitchChannel, twitchUser)
-      .catch((err) => {
-        this.logger.error(
-          'Erro inesperado em processClipRequest:',
-          err?.stack || err,
-        );
-      });
+    try {
+      // Aguarda o clip ser criado
+      const clipUrl = await this.clipService.processClipRequest(
+        twitchChannel,
+        twitchUser,
+      );
 
-    // O que volta pro chat da Twitch imediatamente.
-    // Você pode customizar essa frase se quiser.
-    const responseText =
-      'Criando clipe segura a mão 👍';
-
-    return res.status(200).type('text/plain').send(responseText);
+      if (clipUrl) {
+        // Retorna as duas mensagens separadas por quebra de linha
+        const responseText = `Criando seu clip segura a mão 👍\nTomae teu clipe truta: ${clipUrl}`;
+        return res.status(200).type('text/plain').send(responseText);
+      } else {
+        return res
+          .status(200)
+          .type('text/plain')
+          .send('Criando seu clip segura a mão 👍\n❌ Falha ao criar clipe. Tente novamente.');
+      }
+    } catch (err: any) {
+      this.logger.error(
+        'Erro inesperado em processClipRequest:',
+        err?.stack || err,
+      );
+      return res
+        .status(200)
+        .type('text/plain')
+        .send('Criando seu clip segura a mão 👍\n❌ Erro ao processar clipe.');
+    }
   }
 }
