@@ -50,13 +50,12 @@ export class ClipService {
     clipUrl: string | null,
     twitchChannel?: string,
     twitchUser?: string,
+    webhookKey = 'DISCORD_WEBHOOK_CLIP',
   ) {
-    const webhookUrl = this.config.get<string>(
-      'DISCORD_WEBHOOK_CLIP',
-    );
+    const webhookUrl = this.config.get<string>(webhookKey);
     if (!webhookUrl) {
       this.logger.warn(
-        'DISCORD_WEBHOOK_CLIP não configurado, pulando resultado.',
+        `${webhookKey} não configurado, pulando resultado.`,
       );
       return;
     }
@@ -137,7 +136,11 @@ export class ClipService {
    * 3. manda resultado final com link (webhook 2)
    * 4. retorna o link do clip para responder no chat
    */
-  async processClipRequest(twitchChannel: string, twitchUser?: string): Promise<string | null> {
+  async processClipRequest(
+    twitchChannel: string,
+    twitchUser?: string,
+    resultWebhookKey = 'DISCORD_WEBHOOK_CLIP',
+  ): Promise<string | null> {
     // 1. Feedback imediato
     try {
       await this.sendAttemptLog(twitchChannel, twitchUser);
@@ -158,7 +161,12 @@ export class ClipService {
 
     // 3. Mandar resultado pro webhook de clipes
     try {
-      await this.sendResultLog(clipUrl, twitchChannel, twitchUser);
+      await this.sendResultLog(
+        clipUrl,
+        twitchChannel,
+        twitchUser,
+        resultWebhookKey,
+      );
     } catch (err: any) {
       this.logger.error(
         'Erro ao enviar webhook de resultado do clip:',
