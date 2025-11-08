@@ -27,14 +27,14 @@ export class ClipController {
 
       if (clipUrl) {
         // Retorna as duas mensagens separadas por quebra de linha
-        const responseText = `Criando seu clip segura a mǜo �Y'?\nTomae teu clipe truta: ${clipUrl}`;
+        const responseText = `Criando seu clip, segura a mao ai!\nToma teu clipe: ${clipUrl}`;
         return res.status(200).type('text/plain').send(responseText);
       }
 
       return res
         .status(200)
         .type('text/plain')
-        .send('Criando seu clip segura a mǜo �Y'?\n�?O Falha ao criar clipe. Tente novamente.');
+        .send('Criando seu clip, segura a mao ai!\nFalha ao criar clipe. Tente novamente.');
     } catch (err: any) {
       this.logger.error(
         'Erro inesperado em processClipRequest:',
@@ -43,7 +43,7 @@ export class ClipController {
       return res
         .status(200)
         .type('text/plain')
-        .send('Criando seu clip segura a mǜo �Y'?\n�?O Erro ao processar clipe.');
+        .send('Criando seu clip, segura a mao ai!\nErro ao processar clipe.');
     }
   }
 
